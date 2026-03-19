@@ -1,11 +1,11 @@
 #!/bin/sh
 
 # 环境变量配置
-EMAIL="peng320829@gmail.com"   # 登录邮箱
-PASSWORD="Qwer12138."     # 登录密码
+EMAIL="*******"   # 登录邮箱
+PASSWORD="******"     # 登录密码
 
 # 要保活的URL列表,多个用英文空格分隔
-URLS="https://free-ussrmbrw.cfapps.us10-001.hana.ondemand.com https://free-sguslnkx.cfapps.ap21.hana.ondemand.com"  
+URLS="https://********.hana.ondemand.com https://*******.ap21.hana.ondemand.com"  
 
 # 颜色定义
 green() {
