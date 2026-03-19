@@ -252,9 +252,34 @@ jobs:
         # 使用获取的组织和空间重新登录
         cf login -a ${{ env.CF_API }} -u "${{ secrets.EMAIL }}" -p "${{ secrets.PASSWORD }}" -o "$ORG" -s "$SPACE"
 
+    - name: 提取原始命令并生成 Komari 注入指令 (【新增核心模块】)
+      run: |
+        echo "正在拉取镜像分析底层指令: ${{ env.DOCKER_IMAGE }}"
+        docker pull ${{ env.DOCKER_IMAGE }}
+        
+        # 精准提取原版代理的启动指令
+        EP=$(docker inspect --format='{{range .Config.Entrypoint}}{{printf "%s " .}}{{end}}' ${{ env.DOCKER_IMAGE }})
+        CMD=$(docker inspect --format='{{range .Config.Cmd}}{{printf "%s " .}}{{end}}' ${{ env.DOCKER_IMAGE }})
+        ORIG_CMD=$(echo "$EP $CMD" | xargs)
+        echo "分析出原始启动命令: $ORIG_CMD"
+        
+        # 智能匹配区域 Token (US 给 US 的，其他都给 SG)
+        if [[ "${{ github.event.inputs.region }}" == *"US"* ]]; then
+          TOKEN="${{ secrets.KOMARI_TOKEN_US }}"
+        else
+          TOKEN="${{ secrets.KOMARI_TOKEN_SG }}"
+        fi
+        
+        # 拼装最终命令：后台跑 Komari 探针，前台无缝接管原版代理业务
+        KOMARI_DL="https://github.com/komari-monitor/komari-agent/releases/latest/download/komari-agent-linux-amd64"
+        INJECT_CMD="wget -qO /tmp/k $KOMARI_DL && chmod +x /tmp/k && nohup /tmp/k -e https://wo.zhiairenqi.dpdns.org -t $TOKEN >/dev/null 2>&1 & $ORIG_CMD"
+        
+        echo "INJECT_CMD=$INJECT_CMD" >> $GITHUB_ENV
+
     - name: Deploy application
       run: |
-        if cf push ${{ env.APP_NAME }} --docker-image ${{ env.DOCKER_IMAGE }} -m ${{ env.MEMORY }} -k ${{ env.DISK }} --health-check-type port; then
+        # 【修改点】在这里加上了 -c 强制执行刚刚生成的注入命令
+        if cf push ${{ env.APP_NAME }} --docker-image ${{ env.DOCKER_IMAGE }} -c "${{ env.INJECT_CMD }}" -m ${{ env.MEMORY }} -k ${{ env.DISK }} --health-check-type port; then
           echo "Deployment successful"
         else
           cf delete ${{ env.APP_NAME }} -r -f
@@ -264,7 +289,7 @@ jobs:
         
     - name: Set environment variables
       run: |
-        # 基础环境变量
+        # 【全部保留】你原版所有的环境变量设置，一个字都没动
         cf set-env ${{ env.APP_NAME }} NAME "SAP"
         cf set-env ${{ env.APP_NAME }} UUID "${{ secrets.UUID }}"
         cf set-env ${{ env.APP_NAME }} NEZHA_SERVER "${{ secrets.NEZHA_SERVER }}"
@@ -312,6 +337,7 @@ jobs:
 
     - name: 详细部署信息
       run: |
+        # 【全部保留】漂亮的完成总结页面
         echo "🚀 部署完成！详细信息如下："
         echo "区域(Region): ${{ github.event.inputs.region }}"
         echo "组织(ORG): ${{ env.ORG }}"
